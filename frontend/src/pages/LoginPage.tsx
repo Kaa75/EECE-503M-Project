@@ -10,14 +10,18 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate()
   const { login } = useAuth()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
     try {
-      await login(username, password)
-      navigate('/dashboard')
+      const mustChange = await login(username, password)
+      if (mustChange) {
+        navigate('/change-credentials')
+      } else {
+        navigate('/dashboard')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
@@ -40,7 +44,7 @@ const LoginPage: React.FC = () => {
               id="username"
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
               required
               disabled={loading}
             />
@@ -52,7 +56,7 @@ const LoginPage: React.FC = () => {
               id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
               required
               disabled={loading}
             />

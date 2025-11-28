@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 interface UseApiState<T> {
   data: T | null;
@@ -7,7 +7,7 @@ interface UseApiState<T> {
 }
 
 interface UseApiReturn<T> extends UseApiState<T> {
-  execute: (...args: any[]) => Promise<T>;
+  execute: (...args: unknown[]) => Promise<T>;
   reset: () => void;
 }
 
@@ -15,7 +15,7 @@ interface UseApiReturn<T> extends UseApiState<T> {
  * Custom hook for handling API calls with loading and error states
  */
 export const useApi = <T,>(
-  apiFunction: (...args: any[]) => Promise<T>
+  apiFunction: (...args: unknown[]) => Promise<T>
 ): UseApiReturn<T> => {
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
@@ -24,13 +24,13 @@ export const useApi = <T,>(
   });
 
   const execute = useCallback(
-    async (...args: any[]) => {
+    async (...args: unknown[]) => {
       setState({ data: null, loading: true, error: null });
       try {
         const result = await apiFunction(...args);
         setState({ data: result, loading: false, error: null });
         return result;
-      } catch (err) {
+      } catch (err: unknown) {
         const error = err instanceof Error ? err.message : 'An error occurred';
         setState({ data: null, loading: false, error });
         throw err;
@@ -69,7 +69,7 @@ export const useAsync = <T,>(
       const result = await asyncFunction();
       setState({ data: result, loading: false, error: null });
       return result;
-    } catch (err) {
+    } catch (err: unknown) {
       const error = err instanceof Error ? err.message : 'An error occurred';
       setState({ data: null, loading: false, error });
       throw err;
@@ -81,7 +81,7 @@ export const useAsync = <T,>(
   }, []);
 
   // Execute immediately if requested
-  React.useEffect(() => {
+  useEffect(() => {
     if (immediate) {
       execute();
     }

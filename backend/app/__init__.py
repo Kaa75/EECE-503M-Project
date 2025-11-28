@@ -30,6 +30,7 @@ def create_app(config_name='development'):
     from app.admin_routes import admin_bp
     from app.support_routes import support_bp
     from app.audit_routes import audit_bp
+    from app.dashboard_routes import dashboard_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(account_bp, url_prefix='/api/accounts')
@@ -37,6 +38,7 @@ def create_app(config_name='development'):
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     app.register_blueprint(support_bp, url_prefix='/api/support')
     app.register_blueprint(audit_bp, url_prefix='/api/audit')
+    app.register_blueprint(dashboard_bp)  # /api/dashboard
     
     # JWT error handlers
     @jwt.expired_token_loader

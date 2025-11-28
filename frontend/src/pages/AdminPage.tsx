@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import apiService from '../services/api'
-import { User } from '../types'
+import { User, UserRole } from '../types'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 const AdminPage: React.FC = () => {
@@ -19,6 +19,19 @@ const AdminPage: React.FC = () => {
     accountType: 'checking' as 'checking' | 'savings',
     openingBalance: 0
   })
+  const [showCreateUser, setShowCreateUser] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    username: '',
+    full_name: '',
+    email: '',
+    phone: '',
+    password: '',
+    role: UserRole.CUSTOMER as string
+  })
+  const [showAccountsViewer, setShowAccountsViewer] = useState(false)
+  const [accountsLoading, setAccountsLoading] = useState(false)
+  const [viewAccountsUser, setViewAccountsUser] = useState<User | null>(null)
+  const [userAccounts, setUserAccounts] = useState<any[]>([])
 
   useEffect(() => {
     loadUsers()
@@ -138,6 +151,11 @@ const AdminPage: React.FC = () => {
                 <option value="admin">Admins</option>
               </select>
             </div>
+            <div className="mt-3">
+              <button className="btn btn-primary" onClick={() => setShowCreateUser(true)}>
+                + Create New User
+              </button>
+            </div>
           </div>
         </div>
 
@@ -196,8 +214,27 @@ const AdminPage: React.FC = () => {
                               setShowAccountModal(true)
                             }}
                             className="btn btn-sm btn-info mr-1"
+                            disabled={user.role === 'admin'}
                           >
-                            Create Account
+                            {user.role === 'admin' ? 'Create Account (disabled)' : 'Create Account'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              setViewAccountsUser(user)
+                              setShowAccountsViewer(true)
+                              setAccountsLoading(true)
+                              try {
+                                const res = await apiService.getAdminUserAccounts(user.id)
+                                setUserAccounts(res.accounts || [])
+                              } catch (err: any) {
+                                setError(err.message || 'Failed to load accounts')
+                              } finally {
+                                setAccountsLoading(false)
+                              }
+                            }}
+                            className="btn btn-sm btn-secondary mr-1"
+                          >
+                            View Accounts
                           </button>
                           {user.is_active ? (
                             <button
@@ -301,6 +338,180 @@ const AdminPage: React.FC = () => {
                   Create Account
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Accounts Viewer Modal */}
+        {showAccountsViewer && viewAccountsUser && (
+          <div className="modal-overlay" onClick={() => { setShowAccountsViewer(false); setUserAccounts([]); setViewAccountsUser(null) }}>
+            <div className="modal-content" style={{ maxWidth: '800px' }} onClick={(e) => e.stopPropagation()}>
+              <h3>Accounts for {viewAccountsUser.username}</h3>
+              {accountsLoading ? <p>Loading accounts...</p> : userAccounts.length === 0 ? <p>No accounts found.</p> : (
+                <div className="table-responsive" style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Number</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Balance</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userAccounts.map(acc => (
+                        <tr key={acc.id}>
+                          <td>{acc.id}</td>
+                          <td>{acc.account_number}</td>
+                          <td>{acc.account_type}</td>
+                          <td>
+                            <span className={`badge badge-${acc.status}`}>{acc.status}</span>
+                          </td>
+                          <td>${Number(acc.balance).toFixed(2)}</td>
+                          <td>
+                            {acc.status === 'active' && (
+                              <button
+                                className="btn btn-sm btn-warning mr-1"
+                                onClick={async () => {
+                                  setError(''); setSuccess('')
+                                  try { await apiService.freezeAccount(acc.id); setSuccess('Account frozen');
+                                    const res = await apiService.getAdminUserAccounts(viewAccountsUser.id); setUserAccounts(res.accounts || [])
+                                  } catch (err: any) { setError(err.message || 'Freeze failed') }
+                                }}
+                              >Freeze</button>
+                            )}
+                            {acc.status === 'frozen' && (
+                              <button
+                                className="btn btn-sm btn-success mr-1"
+                                onClick={async () => {
+                                  setError(''); setSuccess('')
+                                  try { await apiService.unfreezeAccount(acc.id); setSuccess('Account unfrozen');
+                                    const res = await apiService.getAdminUserAccounts(viewAccountsUser.id); setUserAccounts(res.accounts || [])
+                                  } catch (err: any) { setError(err.message || 'Unfreeze failed') }
+                                }}
+                              >Unfreeze</button>
+                            )}
+                            {acc.status !== 'closed' && (
+                              <button
+                                className="btn btn-sm btn-danger"
+                                onClick={async () => {
+                                  if (!confirm('Close this account? This action is irreversible.')) return
+                                  setError(''); setSuccess('')
+                                  try { await apiService.closeAccount(acc.id); setSuccess('Account closed');
+                                    const res = await apiService.getAdminUserAccounts(viewAccountsUser.id); setUserAccounts(res.accounts || [])
+                                  } catch (err: any) { setError(err.message || 'Close failed') }
+                                }}
+                              >Close</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="flex-end mt-3">
+                <button className="btn btn-secondary" onClick={() => { setShowAccountsViewer(false); setUserAccounts([]); setViewAccountsUser(null) }}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Create User Modal */}
+        {showCreateUser && (
+          <div className="modal-overlay" onClick={() => setShowCreateUser(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h3>Create New User</h3>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  setError('')
+                  setSuccess('')
+                  try {
+                    if (createForm.username.length < 3) throw new Error('Username too short')
+                    if (createForm.password.length < 8) throw new Error('Password must be ≥ 8 chars')
+                    if (createForm.full_name.length < 2) throw new Error('Full name too short')
+                    await apiService.createUser({
+                      username: createForm.username,
+                      password: createForm.password,
+                      email: createForm.email,
+                      phone: createForm.phone,
+                      full_name: createForm.full_name,
+                      role: createForm.role
+                    })
+                    setSuccess('User created successfully')
+                    setShowCreateUser(false)
+                    setCreateForm({ username: '', full_name: '', email: '', phone: '', password: '', role: UserRole.CUSTOMER })
+                    loadUsers()
+                  } catch (err: any) {
+                    setError(err.message || 'Failed to create user')
+                  }
+                }}
+              >
+                <div className="form-group">
+                  <label>Username *</label>
+                  <input
+                    value={createForm.username}
+                    onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
+                    required
+                    minLength={3}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Full Name *</label>
+                  <input
+                    value={createForm.full_name}
+                    onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
+                    required
+                    minLength={2}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    value={createForm.email}
+                    onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Phone *</label>
+                  <input
+                    value={createForm.phone}
+                    onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Password *</label>
+                  <input
+                    type="password"
+                    value={createForm.password}
+                    onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                    required
+                    minLength={8}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Role *</label>
+                  <select
+                    value={createForm.role}
+                    onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                  >
+                    <option value={UserRole.CUSTOMER}>Customer</option>
+                    <option value={UserRole.SUPPORT_AGENT}>Support Agent</option>
+                    <option value={UserRole.AUDITOR}>Auditor</option>
+                    <option value={UserRole.ADMIN}>Admin</option>
+                  </select>
+                </div>
+                <div className="flex-end">
+                  <button type="button" className="btn btn-secondary mr-2" onClick={() => setShowCreateUser(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary">Create User</button>
+                </div>
+              </form>
             </div>
           </div>
         )}

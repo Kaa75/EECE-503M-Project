@@ -54,6 +54,7 @@ class User(db.Model):
     full_name = db.Column(db.String(120), nullable=False)
     role = db.Column(db.Enum(UserRole), default=UserRole.CUSTOMER, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    must_change_credentials = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     last_login = db.Column(db.DateTime, nullable=True)

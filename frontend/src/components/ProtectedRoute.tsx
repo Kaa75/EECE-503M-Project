@@ -5,7 +5,7 @@ import { UserRole } from '../types'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  requiredRoles?: UserRole[] | string[]
+  requiredRoles?: UserRole[]
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles }) => {
@@ -15,8 +15,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles
     return <Navigate to="/login" replace />
   }
 
-  if (requiredRoles && requiredRoles.length > 0) {
-    const hasRequiredRole = requiredRoles.includes(user?.role as any)
+  if (requiredRoles && requiredRoles.length > 0 && user) {
+    const hasRequiredRole = requiredRoles.includes(user.role)
     if (!hasRequiredRole) {
       return <Navigate to="/dashboard" replace />
     }

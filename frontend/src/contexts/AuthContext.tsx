@@ -7,7 +7,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<boolean>;
   register: (username: string, email: string, phone: string, password: string, fullName: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
@@ -48,8 +48,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const response = await apiService.login({ username, password });
       if (response.success && response.access_token) {
+        // Fetch CSRF token after successful login and store it in API client
+        try {
+          await apiService.fetchCsrfToken();
+        } catch (csrfErr) {
+          // Non-fatal: surface error but continue to get profile
+          console.warn('Failed to fetch CSRF token:', csrfErr);
+        }
         const profile = await apiService.getProfile();
         setUser(profile);
+        return !!response.must_change_credentials;
       } else {
         throw new Error(response.error || 'Login failed');
       }

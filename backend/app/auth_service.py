@@ -8,7 +8,7 @@ from app.security import (
 
 class AuthService:
     """Service for handling user authentication and authorization."""
-    
+    # Defaults will be overridden by config values when accessed inside methods
     MAX_LOGIN_ATTEMPTS = 5
     LOCKOUT_DURATION = 15  # minutes
     
@@ -128,6 +128,11 @@ class AuthService:
             raise ValueError("Invalid username or password")
         
         # Check if account is locked
+        # Use configured lockout duration if present
+        from flask import current_app
+        max_attempts = current_app.config.get('MAX_LOGIN_ATTEMPTS', AuthService.MAX_LOGIN_ATTEMPTS)
+        lockout_minutes = current_app.config.get('LOCKOUT_DURATION', AuthService.LOCKOUT_DURATION)
+
         if check_account_lockout(user):
             log_audit(
                 user_id=user.id,
@@ -143,8 +148,8 @@ class AuthService:
         if not verify_password(password, user.password_hash):
             user.failed_login_attempts += 1
             
-            if user.failed_login_attempts >= AuthService.MAX_LOGIN_ATTEMPTS:
-                lock_account(user, AuthService.LOCKOUT_DURATION)
+            if user.failed_login_attempts >= max_attempts:
+                lock_account(user, lockout_minutes)
                 log_audit(
                     user_id=user.id,
                     action=AuditAction.LOGIN_FAILED,
@@ -195,10 +200,10 @@ class AuthService:
             ip_address=ip_address
         )
         
-        # Create tokens with string identity
+        # Create tokens with string identity (tokens still issued so frontend can call change-credentials)
         access_token = create_access_token(identity=str(user.id))
         refresh_token = create_refresh_token(identity=str(user.id))
-        
+
         return {
             'success': True,
             'access_token': access_token,
@@ -207,7 +212,8 @@ class AuthService:
             'username': user.username,
             'email': user.email,
             'role': user.role.value,
-            'full_name': user.full_name
+            'full_name': user.full_name,
+            'must_change_credentials': user.must_change_credentials
         }
     
     @staticmethod
@@ -266,6 +272,65 @@ class AuthService:
         except Exception as e:
             db.session.rollback()
             raise ValueError(f"Failed to change password: {str(e)}")
+
+    @staticmethod
+    def change_credentials(user_id: int, current_password: str, new_username: str, new_password: str) -> dict:
+        """Change both username and password for a user (admin self-rotation).
+
+        Args:
+            user_id: ID of the user performing change
+            current_password: Existing password for verification
+            new_username: Desired new unique username
+            new_password: New password meeting policy
+
+        Returns:
+            Dict with success status
+
+        Raises:
+            ValueError on validation failures
+        """
+        user = User.query.get(user_id)
+        if not user:
+            raise ValueError("User not found")
+
+        # Verify current password
+        if not verify_password(current_password, user.password_hash):
+            raise ValueError("Invalid current password")
+
+        # Validate new username
+        if not new_username or len(new_username) < 3 or len(new_username) > 50:
+            raise ValueError("Username must be 3-50 characters")
+
+        normalized_username = new_username.lower()
+        existing = User.query.filter(db.func.lower(User.username) == normalized_username, User.id != user_id).first()
+        if existing:
+            raise ValueError("Username already taken")
+
+        # Validate new password
+        if not new_password or len(new_password) < 8:
+            raise ValueError("New password must be at least 8 characters")
+        if verify_password(new_password, user.password_hash):
+            raise ValueError("New password must differ from current password")
+
+        try:
+            user.username = normalized_username
+            user.password_hash = hash_password(new_password)
+            user.must_change_credentials = False
+            user.updated_at = datetime.utcnow()
+            db.session.commit()
+
+            log_audit(
+                user_id=user.id,
+                action=AuditAction.ADMIN_ACTION,
+                resource_type='user',
+                resource_id=str(user.id),
+                details='Credentials rotated (username + password)'
+            )
+
+            return {'success': True, 'message': 'Credentials updated', 'username': user.username}
+        except Exception as e:
+            db.session.rollback()
+            raise ValueError(f"Failed to update credentials: {str(e)}")
     
     @staticmethod
     def get_user(user_id: int) -> dict:

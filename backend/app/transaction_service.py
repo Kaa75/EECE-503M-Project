@@ -396,3 +396,36 @@ class TransactionService:
             'limit': limit,
             'offset': offset
         }
+
+    @staticmethod
+    def get_all_transactions(limit: int = 50, offset: int = 0) -> dict:
+        """
+        Return all transactions across all accounts for privileged roles.
+
+        Args:
+            limit: Max number of transactions
+            offset: Number to skip
+
+        Returns:
+            Dictionary with transactions and pagination meta
+        """
+        query = Transaction.query
+        total_count = query.count()
+        transactions = query.order_by(Transaction.created_at.desc()).limit(limit).offset(offset).all()
+        return {
+            'transactions': [
+                {
+                    'transaction_id': t.transaction_id,
+                    'sender_account': t.sender_account.account_number,
+                    'receiver_account': t.receiver_account.account_number,
+                    'amount': t.amount,
+                    'transaction_type': t.transaction_type.value,
+                    'description': t.description,
+                    'created_at': t.created_at.isoformat()
+                }
+                for t in transactions
+            ],
+            'total_count': total_count,
+            'limit': limit,
+            'offset': offset
+        }

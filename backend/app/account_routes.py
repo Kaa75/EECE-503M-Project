@@ -1,12 +1,15 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.account_service import AccountService
-from app.models import User, UserRole
+from app.models import User, UserRole, Account
+from app.security import require_role, require_csrf
 
 account_bp = Blueprint('accounts', __name__, url_prefix='/api/accounts')
 
 @account_bp.route('', methods=['POST'])
 @jwt_required()
+@require_role(UserRole.CUSTOMER, UserRole.ADMIN)
+@require_csrf
 def create_account():
     """Create a new account."""
     try:
@@ -43,10 +46,17 @@ def create_account():
 
 @account_bp.route('/<int:account_id>', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.CUSTOMER, UserRole.SUPPORT_AGENT, UserRole.AUDITOR, UserRole.ADMIN)
 def get_account(account_id):
     """Get account details."""
     try:
         result = AccountService.get_account(account_id)
+        # Ownership check for customers only
+        requester_id = int(get_jwt_identity())
+        requester = User.query.get(requester_id)
+        if requester.role == UserRole.CUSTOMER:
+            if result.get('user_id') != requester_id:
+                return jsonify({'error': 'Customers can only view their own accounts'}), 403
         return jsonify(result), 200
     except ValueError as e:
         return jsonify({'error': str(e)}), 404
@@ -55,13 +65,20 @@ def get_account(account_id):
 
 @account_bp.route('/user/<int:user_id>', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.CUSTOMER, UserRole.SUPPORT_AGENT, UserRole.AUDITOR, UserRole.ADMIN)
 def get_user_accounts(user_id):
     """Get all accounts for a user."""
     try:
         user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
-        
+
+        requester_id = int(get_jwt_identity())
+        requester = User.query.get(requester_id)
+        # Customers can only view their own accounts list
+        if requester.role == UserRole.CUSTOMER and requester_id != user_id:
+            return jsonify({'error': 'Customers cannot view other users accounts'}), 403
+
         result = AccountService.get_user_accounts(user_id)
         return jsonify({'accounts': result}), 200
     except Exception as e:
@@ -69,6 +86,8 @@ def get_user_accounts(user_id):
 
 @account_bp.route('/<int:account_id>/freeze', methods=['POST'])
 @jwt_required()
+@require_role(UserRole.ADMIN)
+@require_csrf
 def freeze_account(account_id):
     """Freeze an account (admin only)."""
     try:
@@ -87,6 +106,8 @@ def freeze_account(account_id):
 
 @account_bp.route('/<int:account_id>/unfreeze', methods=['POST'])
 @jwt_required()
+@require_role(UserRole.ADMIN)
+@require_csrf
 def unfreeze_account(account_id):
     """Unfreeze an account (admin only)."""
     try:
@@ -105,10 +126,18 @@ def unfreeze_account(account_id):
 
 @account_bp.route('/<int:account_id>/balance', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.CUSTOMER, UserRole.SUPPORT_AGENT, UserRole.AUDITOR, UserRole.ADMIN)
 def get_balance(account_id):
     """Get account balance."""
     try:
         result = AccountService.get_account_balance(account_id)
+        # Restrict customers to own account balance
+        requester_id = int(get_jwt_identity())
+        requester = User.query.get(requester_id)
+        if requester.role == UserRole.CUSTOMER:
+            account_obj = Account.query.get(account_id)
+            if not account_obj or account_obj.user_id != requester_id:
+                return jsonify({'error': 'Customers can only view their own balances'}), 403
         return jsonify(result), 200
     except ValueError as e:
         return jsonify({'error': str(e)}), 404
@@ -117,6 +146,8 @@ def get_balance(account_id):
 
 @account_bp.route('/<int:account_id>/close', methods=['POST'])
 @jwt_required()
+@require_role(UserRole.ADMIN)
+@require_csrf
 def close_account(account_id):
     """Close an account (admin only)."""
     try:

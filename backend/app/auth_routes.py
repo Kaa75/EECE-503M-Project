@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.exceptions import BadRequest
 from app.auth_service import AuthService
-from app.security import require_auth
+from app.security import require_auth, require_role, generate_csrf_token
 from app.models import User, UserRole
 
 auth_bp = Blueprint('auth', __name__)
@@ -52,7 +52,7 @@ def login():
             password=data.get('password'),
             ip_address=request.remote_addr
         )
-        
+        # If must_change_credentials True, still return success but flag present
         return jsonify(result), 200
     except ValueError as e:
         return jsonify({'error': str(e)}), 401
@@ -143,4 +143,47 @@ def update_profile():
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
+        return jsonify({'error': 'Internal server error'}), 500
+
+        
+@auth_bp.route('/csrf', methods=['GET'])
+@jwt_required()
+def get_csrf_token():
+    """Return CSRF token for the current authenticated user."""
+    try:
+        user_id = int(get_jwt_identity())
+        token = generate_csrf_token(user_id)
+        return jsonify({'csrf_token': token}), 200
+    except Exception:
+        return jsonify({'error': 'Internal server error'}), 500
+
+@auth_bp.route('/change-credentials', methods=['POST'])
+@jwt_required()
+@require_role(UserRole.ADMIN)
+def change_credentials():
+    """Rotate admin credentials (username + password) as required on first login.
+
+    JSON Body:
+    {
+      "current_password": "...",
+      "new_username": "...",
+      "new_password": "..."
+    }
+    Returns success JSON and clears must_change_credentials flag.
+    """
+    try:
+        user_id = int(get_jwt_identity())
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        result = AuthService.change_credentials(
+            user_id=user_id,
+            current_password=data.get('current_password'),
+            new_username=data.get('new_username'),
+            new_password=data.get('new_password')
+        )
+        return jsonify(result), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception:
         return jsonify({'error': 'Internal server error'}), 500

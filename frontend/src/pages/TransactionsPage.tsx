@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiService from '../services/api'
-import { Account, Transaction } from '../types'
+import { Account, Transaction, UserRole } from '../types'
 
 const TransactionsPage: React.FC = () => {
   const { user } = useAuth()
@@ -33,10 +33,16 @@ const TransactionsPage: React.FC = () => {
   })
 
   useEffect(() => {
-    loadAccounts()
+    if (!user) return
+    // Privileged roles: show all transactions; customers: load own accounts
+    if (user.role === UserRole.SUPPORT_AGENT || user.role === UserRole.AUDITOR || user.role === UserRole.ADMIN) {
+      loadAllTransactions()
+    } else {
+      loadAccounts()
+    }
   }, [user])
 
-  const loadAccounts = async () => {
+  const loadAccounts = async (): Promise<void> => {
     try {
       if (user?.id) {
         const accountList = await apiService.getUserAccounts(user.id)
@@ -46,12 +52,13 @@ const TransactionsPage: React.FC = () => {
           loadTransactions(accountList[0].id)
         }
       }
-    } catch (err) {
-      setError('Failed to load accounts')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load accounts'
+      setError(message)
     }
   }
 
-  const loadTransactions = async (accountId?: number) => {
+  const loadTransactions = async (accountId?: number): Promise<void> => {
     const id = accountId || parseInt(filter.account_id)
     if (!id) return
 
@@ -59,20 +66,40 @@ const TransactionsPage: React.FC = () => {
       setLoading(true)
       const result = await apiService.getAccountTransactions(id, 50, 0)
       setTransactions(result.transactions)
-    } catch (err) {
-      setError('Failed to load transactions')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load transactions'
+      setError(message)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleFilterTransactions = async (e: React.FormEvent) => {
+  const loadAllTransactions = async (): Promise<void> => {
+    try {
+      setLoading(true)
+      const result = await apiService.getAllTransactions(100, 0)
+      setTransactions(result.transactions as unknown as Transaction[])
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load transactions'
+      setError(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFilterTransactions = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     if (!filter.account_id) return
 
     try {
       setLoading(true)
-      const filters: any = {}
+      const filters: {
+        start_date?: string
+        end_date?: string
+        transaction_type?: string
+        min_amount?: number
+        max_amount?: number
+      } = {}
       if (filter.start_date) filters.start_date = filter.start_date
       if (filter.end_date) filters.end_date = filter.end_date
       if (filter.transaction_type) filters.transaction_type = filter.transaction_type
@@ -81,14 +108,15 @@ const TransactionsPage: React.FC = () => {
 
       const result = await apiService.filterTransactions(parseInt(filter.account_id), filters)
       setTransactions(result.transactions)
-    } catch (err) {
-      setError('Failed to filter transactions')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to filter transactions'
+      setError(message)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleTransfer = async (e: React.FormEvent) => {
+  const handleTransfer = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     setError('')
     setSuccess('')
@@ -115,8 +143,9 @@ const TransactionsPage: React.FC = () => {
       setTransfer({ from_account_id: '', to_account_id: '', to_account_number: '', amount: '', description: '' })
       loadAccounts()
       loadTransactions()
-    } catch (err: any) {
-      setError(err.message || 'Transfer failed')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Transfer failed'
+      setError(message)
     }
   }
 
@@ -135,18 +164,20 @@ const TransactionsPage: React.FC = () => {
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
-        {/* Transfer Button */}
-        <div className="mb-3">
-          <button 
-            onClick={() => setShowTransferForm(!showTransferForm)}
-            className="btn btn-primary"
-          >
-            {showTransferForm ? 'Cancel Transfer' : '💸 Make a Transfer'}
-          </button>
-        </div>
+        {/* Transfer Button - hidden for admin users */}
+        {user?.role !== UserRole.ADMIN && (
+          <div className="mb-3">
+            <button 
+              onClick={() => setShowTransferForm(!showTransferForm)}
+              className="btn btn-primary"
+            >
+              {showTransferForm ? 'Cancel Transfer' : '💸 Make a Transfer'}
+            </button>
+          </div>
+        )}
 
         {/* Transfer Form */}
-        {showTransferForm && (
+        {showTransferForm && user?.role !== UserRole.ADMIN && (
           <div className="card mb-3">
             <h2>New Transfer</h2>
             
@@ -171,7 +202,7 @@ const TransactionsPage: React.FC = () => {
                 <label>From Account</label>
                 <select
                   value={transfer.from_account_id}
-                  onChange={(e) => setTransfer({ ...transfer, from_account_id: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTransfer({ ...transfer, from_account_id: e.target.value })}
                   required
                 >
                   <option value="">Select account</option>
@@ -188,7 +219,7 @@ const TransactionsPage: React.FC = () => {
                   <label>To Account (Your Account)</label>
                   <select
                     value={transfer.to_account_id}
-                    onChange={(e) => setTransfer({ ...transfer, to_account_id: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTransfer({ ...transfer, to_account_id: e.target.value })}
                     required
                   >
                     <option value="">Select account</option>
@@ -205,7 +236,7 @@ const TransactionsPage: React.FC = () => {
                   <input
                     type="text"
                     value={transfer.to_account_number}
-                    onChange={(e) => setTransfer({ ...transfer, to_account_number: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTransfer({ ...transfer, to_account_number: e.target.value })}
                     placeholder="ACC-1234567890"
                     required
                   />
@@ -219,7 +250,7 @@ const TransactionsPage: React.FC = () => {
                   step="0.01"
                   min="0.01"
                   value={transfer.amount}
-                  onChange={(e) => setTransfer({ ...transfer, amount: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTransfer({ ...transfer, amount: e.target.value })}
                   placeholder="0.00"
                   required
                 />
@@ -230,7 +261,7 @@ const TransactionsPage: React.FC = () => {
                 <input
                   type="text"
                   value={transfer.description}
-                  onChange={(e) => setTransfer({ ...transfer, description: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTransfer({ ...transfer, description: e.target.value })}
                   placeholder="Payment for..."
                 />
               </div>
@@ -243,85 +274,88 @@ const TransactionsPage: React.FC = () => {
         )}
 
         {/* Transaction Filter */}
-        <div className="card mb-3">
-          <h2>Filter Transactions</h2>
-          <form onSubmit={handleFilterTransactions}>
-            <div className="grid grid-2">
-              <div className="form-group">
-                <label>Account</label>
-                <select
-                  value={filter.account_id}
-                  onChange={(e) => {
-                    setFilter({ ...filter, account_id: e.target.value })
-                    loadTransactions(parseInt(e.target.value))
-                  }}
-                >
-                  {accounts.map(account => (
-                    <option key={account.id} value={account.id}>
-                      {account.account_number} - {account.account_type}
-                    </option>
-                  ))}
-                </select>
+        {/* Customer-only filter by account */}
+        {user?.role === UserRole.CUSTOMER && (
+          <div className="card mb-3">
+            <h2>Filter Transactions</h2>
+            <form onSubmit={handleFilterTransactions}>
+              <div className="grid grid-2">
+                <div className="form-group">
+                  <label>Account</label>
+                  <select
+                    value={filter.account_id}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                      setFilter({ ...filter, account_id: e.target.value })
+                      loadTransactions(parseInt(e.target.value))
+                    }}
+                  >
+                    {accounts.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_number} - {account.account_type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Transaction Type</label>
+                  <select
+                    value={filter.transaction_type}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilter({ ...filter, transaction_type: e.target.value })}
+                  >
+                    <option value="">All</option>
+                    <option value="credit">Credit</option>
+                    <option value="debit">Debit</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Start Date</label>
+                  <input
+                    type="date"
+                    value={filter.start_date}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilter({ ...filter, start_date: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>End Date</label>
+                  <input
+                    type="date"
+                    value={filter.end_date}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilter({ ...filter, end_date: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Min Amount</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={filter.min_amount}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilter({ ...filter, min_amount: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Max Amount</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={filter.max_amount}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilter({ ...filter, max_amount: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label>Transaction Type</label>
-                <select
-                  value={filter.transaction_type}
-                  onChange={(e) => setFilter({ ...filter, transaction_type: e.target.value })}
-                >
-                  <option value="">All</option>
-                  <option value="credit">Credit</option>
-                  <option value="debit">Debit</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Start Date</label>
-                <input
-                  type="date"
-                  value={filter.start_date}
-                  onChange={(e) => setFilter({ ...filter, start_date: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>End Date</label>
-                <input
-                  type="date"
-                  value={filter.end_date}
-                  onChange={(e) => setFilter({ ...filter, end_date: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Min Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={filter.min_amount}
-                  onChange={(e) => setFilter({ ...filter, min_amount: e.target.value })}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Max Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={filter.max_amount}
-                  onChange={(e) => setFilter({ ...filter, max_amount: e.target.value })}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            <button type="submit" className="btn btn-primary">
-              Apply Filters
-            </button>
-          </form>
-        </div>
+              <button type="submit" className="btn btn-primary">
+                Apply Filters
+              </button>
+            </form>
+          </div>
+        )}
 
         {/* Transaction History */}
         <div className="card">

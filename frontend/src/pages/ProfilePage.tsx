@@ -23,7 +23,7 @@ const ProfilePage: React.FC = () => {
     confirm_password: ''
   })
 
-  const handleUpdateProfile = async (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setSuccess('')
@@ -33,12 +33,13 @@ const ProfilePage: React.FC = () => {
       setSuccess('Profile updated successfully!')
       setEditing(false)
       window.location.reload()
-    } catch (err: any) {
-      setError(err.message || 'Failed to update profile')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update profile'
+      setError(message)
     }
   }
 
-  const handleChangePassword = async (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setSuccess('')
@@ -61,8 +62,9 @@ const ProfilePage: React.FC = () => {
       setSuccess('Password changed successfully!')
       setChangingPassword(false)
       setPassword({ old_password: '', new_password: '', confirm_password: '' })
-    } catch (err: any) {
-      setError(err.message || 'Failed to change password')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to change password'
+      setError(message)
     }
   }
 
@@ -106,7 +108,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="text"
                   value={profile.full_name}
-                  onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile({ ...profile, full_name: e.target.value })}
                   required
                 />
               </div>
@@ -116,7 +118,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="email"
                   value={profile.email}
-                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile({ ...profile, email: e.target.value })}
                   required
                 />
               </div>
@@ -126,7 +128,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="tel"
                   value={profile.phone}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setProfile({ ...profile, phone: e.target.value })}
                   required
                 />
               </div>
@@ -174,7 +176,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="password"
                   value={password.old_password}
-                  onChange={(e) => setPassword({ ...password, old_password: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword({ ...password, old_password: e.target.value })}
                   required
                 />
               </div>
@@ -184,7 +186,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="password"
                   value={password.new_password}
-                  onChange={(e) => setPassword({ ...password, new_password: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword({ ...password, new_password: e.target.value })}
                   placeholder="At least 8 characters"
                   required
                 />
@@ -195,7 +197,7 @@ const ProfilePage: React.FC = () => {
                 <input
                   type="password"
                   value={password.confirm_password}
-                  onChange={(e) => setPassword({ ...password, confirm_password: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword({ ...password, confirm_password: e.target.value })}
                   required
                 />
               </div>

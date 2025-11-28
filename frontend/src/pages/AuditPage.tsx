@@ -150,8 +150,9 @@ const AuditPage: React.FC = () => {
                           <td>
                             {log.resource_type && (
                               <span>
-                                {log.resource_type}
-                                {log.resource_id && ` (${log.resource_id})`}
+                                {log.resource_type === 'user' && (log as any).resource_username
+                                  ? `user: ${(log as any).resource_username}`
+                                  : log.resource_type + (log.resource_id ? ` (${log.resource_id})` : '')}
                               </span>
                             )}
                           </td>

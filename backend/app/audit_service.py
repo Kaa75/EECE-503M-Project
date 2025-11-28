@@ -56,6 +56,7 @@ class AuditService:
                     'action': log.action.value,
                     'resource_type': log.resource_type,
                     'resource_id': log.resource_id,
+                    'resource_username': (User.query.get(int(log.resource_id)).username if (log.resource_type == 'user' and str(log.resource_id).isdigit() and User.query.get(int(log.resource_id))) else None),
                     'details': log.details,
                     'ip_address': log.ip_address,
                     'timestamp': log.timestamp.isoformat()
@@ -183,6 +184,8 @@ class AuditService:
                     'action': log.action.value if log.action else None,
                     'resource_type': log.resource_type,
                     'resource_id': log.resource_id,
+                    'resource_username': (User.query.get(int(log.resource_id)).username if (log.resource_type == 'user' and str(log.resource_id).isdigit() and User.query.get(int(log.resource_id))) else None),
+                    'resource_username': (User.query.get(int(log.resource_id)).username if (log.resource_type == 'user' and str(log.resource_id).isdigit() and User.query.get(int(log.resource_id))) else None),
                     'details': log.details,
                     'ip_address': log.ip_address,
                     'timestamp': log.timestamp.isoformat()
@@ -261,6 +264,7 @@ class AuditService:
                     'username': log.user.username if log.user else 'System',
                     'action': log.action.value,
                     'resource_id': log.resource_id,
+                    'resource_username': (User.query.get(int(log.resource_id)).username if (log.resource_type == 'user' and str(log.resource_id).isdigit() and User.query.get(int(log.resource_id))) else None),
                     'details': log.details,
                     'timestamp': log.timestamp.isoformat()
                 }

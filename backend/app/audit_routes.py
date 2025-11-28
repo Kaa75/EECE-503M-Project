@@ -3,11 +3,13 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 from app.audit_service import AuditService
 from app.models import User, UserRole
+from app.security import require_role
 
 audit_bp = Blueprint('audit', __name__, url_prefix='/api/audit')
 
 @audit_bp.route('/logs', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.AUDITOR, UserRole.ADMIN)
 def get_audit_logs():
     """Get audit logs (auditors and admins only)."""
     try:
@@ -57,6 +59,7 @@ def get_audit_logs():
 
 @audit_bp.route('/user/<int:user_id>/logs', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.AUDITOR, UserRole.ADMIN)
 def get_user_audit_logs(user_id):
     """Get audit logs for a specific user (auditors and admins only)."""
     try:
@@ -78,6 +81,7 @@ def get_user_audit_logs(user_id):
 
 @audit_bp.route('/login-attempts', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.AUDITOR, UserRole.ADMIN)
 def get_login_attempts():
     """Get login attempts (auditors and admins only)."""
     try:
@@ -98,6 +102,7 @@ def get_login_attempts():
 
 @audit_bp.route('/suspicious-activities', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.AUDITOR, UserRole.ADMIN)
 def get_suspicious_activities():
     """Get suspicious activities (auditors and admins only)."""
     try:
@@ -117,6 +122,7 @@ def get_suspicious_activities():
 
 @audit_bp.route('/admin-actions', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.AUDITOR, UserRole.ADMIN)
 def get_admin_actions():
     """Get admin actions (auditors and admins only)."""
     try:
@@ -136,6 +142,7 @@ def get_admin_actions():
 
 @audit_bp.route('/account-freeze-logs', methods=['GET'])
 @jwt_required()
+@require_role(UserRole.AUDITOR, UserRole.ADMIN)
 def get_account_freeze_logs():
     """Get account freeze/unfreeze logs (auditors and admins only)."""
     try:

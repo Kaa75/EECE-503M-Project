@@ -146,6 +146,47 @@ class SupportService:
             'limit': limit,
             'offset': offset
         }
+
+    @staticmethod
+    def get_tickets_by_status(status: str, limit: int = 10, offset: int = 0) -> dict:
+        """
+        Get all tickets filtered by status (open/in_progress/resolved).
+
+        Args:
+            status: Ticket status to filter
+            limit: Maximum number of tickets to return
+            offset: Number of tickets to skip
+
+        Returns:
+            Dictionary with ticket list
+        """
+        try:
+            ticket_status = TicketStatus[status.upper()]
+        except KeyError:
+            raise ValueError(f"Invalid status: {status}")
+
+        tickets = SupportTicket.query.filter_by(status=ticket_status).order_by(
+            SupportTicket.created_at.desc()
+        ).limit(limit).offset(offset).all()
+
+        total_count = SupportTicket.query.filter_by(status=ticket_status).count()
+
+        return {
+            'tickets': [
+                {
+                    'ticket_id': t.ticket_id,
+                    'customer_id': t.customer_id,
+                    'customer_name': t.customer.full_name,
+                    'subject': t.subject,
+                    'status': t.status.value,
+                    'created_at': t.created_at.isoformat()
+                }
+                for t in tickets
+            ],
+            'total_count': total_count,
+            'limit': limit,
+            'offset': offset
+        }
     
     @staticmethod
     def get_customer_tickets(customer_id: int, limit: int = 10, offset: int = 0) -> dict:
@@ -173,15 +214,26 @@ class SupportService:
         
         total_count = SupportTicket.query.filter_by(customer_id=customer_id).count()
         
+        # Return enriched ticket objects to align with frontend SupportTicket interface expectations
         return {
             'customer_id': customer_id,
             'tickets': [
                 {
+                    'id': t.id,
                     'ticket_id': t.ticket_id,
-                    'subject': t.subject,
-                    'status': t.status.value,
+                    'customer_id': t.customer_id,
+                    'customer_name': t.customer.full_name,
+                    'assigned_agent_id': t.assigned_agent_id,
                     'assigned_agent_name': t.assigned_agent.full_name if t.assigned_agent else None,
-                    'created_at': t.created_at.isoformat()
+                    'subject': t.subject,
+                    'description': t.description,
+                    'status': t.status.value,
+                    'priority': t.priority,
+                    'created_at': t.created_at.isoformat(),
+                    'updated_at': t.updated_at.isoformat(),
+                    'resolved_at': t.resolved_at.isoformat() if t.resolved_at else None,
+                    # Do not include notes list here for efficiency (details endpoint supplies them)
+                    'notes': []
                 }
                 for t in tickets
             ],

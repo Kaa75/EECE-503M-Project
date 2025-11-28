@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import apiService from '../services/api'
-import { SupportTicket, CreateTicketRequest } from '../types'
+import { SupportTicket, CreateTicketRequest, UserRole } from '../types'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 const SupportPage: React.FC = () => {
@@ -29,34 +29,54 @@ const SupportPage: React.FC = () => {
   // Status filter
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'in_progress' | 'resolved'>('all')
 
-  const isSupportAgent = user?.role === 'support_agent' || user?.role === 'admin'
+  const isSupportAgent = user?.role === UserRole.SUPPORT_AGENT || user?.role === UserRole.ADMIN
 
   useEffect(() => {
-    loadTickets()
+    const init = async () => {
+      try {
+        // Ensure CSRF is available for mutating actions in this module
+        await apiService.fetchCsrfToken()
+      } catch {}
+      loadTickets()
+    }
+    init()
   }, [statusFilter])
 
-  const loadTickets = async () => {
+  const loadTickets = async (): Promise<void> => {
     try {
       setLoading(true)
       setError(null)
       
       if (isSupportAgent) {
-        // Support agents see all open tickets
-        const response = await apiService.getOpenTickets(50, 0)
-        setTickets(response.tickets)
+        // Support agents/admins: for 'all', fetch and merge all statuses
+        if (statusFilter === 'all') {
+          const [openRes, inProgRes, resolvedRes] = await Promise.all([
+            apiService.getTicketsByStatus('open', 50, 0),
+            apiService.getTicketsByStatus('in_progress', 50, 0),
+            apiService.getTicketsByStatus('resolved', 50, 0)
+          ])
+          const merged = [...openRes.tickets, ...inProgRes.tickets, ...resolvedRes.tickets]
+          // Deduplicate by ticket_id
+          const unique = Array.from(new Map(merged.map(t => [t.ticket_id, t])).values())
+          setTickets(unique)
+        } else {
+          const response = await apiService.getTicketsByStatus(statusFilter as 'open'|'in_progress'|'resolved', 50, 0)
+          setTickets(response.tickets)
+        }
       } else {
         // Customers see their own tickets
         const response = await apiService.getCustomerTickets(user!.id, 50, 0)
         setTickets(response.tickets)
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load tickets')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load tickets'
+      setError(message)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCreateTicket = async (e: React.FormEvent) => {
+  const handleCreateTicket = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     try {
       setError(null)
@@ -68,22 +88,24 @@ const SupportPage: React.FC = () => {
       setShowCreateModal(false)
       setTicketForm({ subject: '', description: '', priority: 'medium' })
       loadTickets()
-    } catch (err: any) {
-      setError(err.message || 'Failed to create ticket')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create ticket'
+      setError(message)
     }
   }
 
-  const handleViewTicket = async (ticketId: string) => {
+  const handleViewTicket = async (ticketId: string): Promise<void> => {
     try {
       setError(null)
       const ticket = await apiService.getTicket(ticketId)
       setSelectedTicket(ticket)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load ticket details')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load ticket details'
+      setError(message)
     }
   }
 
-  const handleUpdateStatus = async (ticketId: string, status: 'open' | 'in_progress' | 'resolved') => {
+  const handleUpdateStatus = async (ticketId: string, status: 'open' | 'in_progress' | 'resolved'): Promise<void> => {
     try {
       setError(null)
       setSuccess(null)
@@ -97,12 +119,13 @@ const SupportPage: React.FC = () => {
         handleViewTicket(ticketId)
       }
       loadTickets()
-    } catch (err: any) {
-      setError(err.message || 'Failed to update ticket status')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update ticket status'
+      setError(message)
     }
   }
 
-  const handleAddNote = async (e: React.FormEvent) => {
+  const handleAddNote = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     if (!selectedTicket || !noteText.trim()) return
     
@@ -118,14 +141,15 @@ const SupportPage: React.FC = () => {
       
       // Reload ticket details
       handleViewTicket(selectedTicket.ticket_id)
-    } catch (err: any) {
-      setError(err.message || 'Failed to add note')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to add note'
+      setError(message)
     } finally {
       setAddingNote(false)
     }
   }
 
-  const getStatusBadgeClass = (status: string) => {
+  const getStatusBadgeClass = (status: 'open' | 'in_progress' | 'resolved' | string): string => {
     switch (status) {
       case 'open':
         return 'badge-danger'
@@ -138,8 +162,9 @@ const SupportPage: React.FC = () => {
     }
   }
 
-  const getPriorityBadgeClass = (priority: string) => {
-    switch (priority.toLowerCase()) {
+  const getPriorityBadgeClass = (priority?: string): string => {
+    const p = (priority || 'medium').toLowerCase()
+    switch (p) {
       case 'high':
         return 'badge-danger'
       case 'medium':
@@ -240,7 +265,7 @@ const SupportPage: React.FC = () => {
                         </td>
                         <td>
                           <span className={`badge ${getPriorityBadgeClass(ticket.priority)}`}>
-                            {ticket.priority}
+                            {(ticket.priority || 'medium')}
                           </span>
                         </td>
                         <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
@@ -335,22 +360,24 @@ const SupportPage: React.FC = () => {
             <div className="card">
               <h3 className="mb-3">Communication</h3>
               
-              {/* Add Note Form */}
-              <form onSubmit={handleAddNote} className="mb-3">
-                <div className="form-group">
-                  <label>Add Note</label>
-                  <textarea
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    placeholder="Type your message here..."
-                    rows={4}
-                    required
-                  />
-                </div>
-                <button type="submit" className="btn btn-primary" disabled={addingNote}>
-                  {addingNote ? 'Adding...' : 'Add Note'}
-                </button>
-              </form>
+              {/* Add Note Form - Support/Admin only per backend */}
+              {isSupportAgent && (
+                <form onSubmit={handleAddNote} className="mb-3">
+                  <div className="form-group">
+                    <label>Add Note</label>
+                    <textarea
+                      value={noteText}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNoteText(e.target.value)}
+                      placeholder="Type your message here..."
+                      rows={4}
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-primary" disabled={addingNote}>
+                    {addingNote ? 'Adding...' : 'Add Note'}
+                  </button>
+                </form>
+              )}
 
               {/* Notes List */}
               <div className="notes-list">
@@ -384,7 +411,7 @@ const SupportPage: React.FC = () => {
         {/* Create Ticket Modal */}
         {showCreateModal && (
           <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content" onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}>
               <h2>Create Support Ticket</h2>
               <form onSubmit={handleCreateTicket}>
                 <div className="form-group">
@@ -392,7 +419,7 @@ const SupportPage: React.FC = () => {
                   <input
                     type="text"
                     value={ticketForm.subject}
-                    onChange={(e) => setTicketForm({ ...ticketForm, subject: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTicketForm({ ...ticketForm, subject: e.target.value })}
                     placeholder="Brief description of your issue"
                     required
                     minLength={5}
@@ -403,7 +430,7 @@ const SupportPage: React.FC = () => {
                   <label>Priority</label>
                   <select
                     value={ticketForm.priority}
-                    onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTicketForm({ ...ticketForm, priority: e.target.value as 'low' | 'medium' | 'high' })}
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -415,7 +442,7 @@ const SupportPage: React.FC = () => {
                   <label>Description *</label>
                   <textarea
                     value={ticketForm.description}
-                    onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setTicketForm({ ...ticketForm, description: e.target.value })}
                     placeholder="Detailed description of your issue"
                     rows={5}
                     required

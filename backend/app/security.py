@@ -3,8 +3,9 @@ import random
 import string
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import request, jsonify
+from flask import request, jsonify, current_app
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+import hmac, hashlib
 from app.models import User, UserRole, AuditLog, AuditAction, db
 
 def hash_password(password: str) -> str:
@@ -187,25 +188,48 @@ def unlock_account(user: User) -> None:
     db.session.commit()
 
 def require_role(*allowed_roles):
-    """
-    Decorator to require specific roles for a route.
-    
+    """Flask decorator enforcing that the JWT-authenticated user has one of the given roles.
+
+    Usage: Place above a route function. Can be stacked with @jwt_required() but also
+    performs its own token verification for safety.
+
     Args:
-        *allowed_roles: Variable number of UserRole values
-        
+        *allowed_roles: Accepts UserRole enum members or role strings matching enum values.
     Returns:
-        Decorated function
+        Wrapped function returning 403 JSON on insufficient permissions.
     """
+    # Normalize roles to enum values for comparison
+    normalized_roles = set()
+    for r in allowed_roles:
+        if isinstance(r, UserRole):
+            normalized_roles.add(r)
+        elif isinstance(r, str):
+            try:
+                normalized_roles.add(UserRole(r.lower()))
+            except Exception:
+                # Ignore invalid role strings silently; they simply won't match
+                pass
+
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            verify_jwt_in_request()
-            user_id = get_jwt_identity()
-            user = User.query.get(user_id)
-            
-            if not user or user.role not in allowed_roles:
-                return jsonify({'error': 'Insufficient permissions'}), 403
-            
+            try:
+                verify_jwt_in_request()
+                raw_identity = get_jwt_identity()
+                # Identity may be string; convert safely
+                try:
+                    user_id = int(raw_identity)
+                except (TypeError, ValueError):
+                    return jsonify({'error': 'Invalid user identity'}), 401
+
+                user = User.query.get(user_id)
+                if not user:
+                    return jsonify({'error': 'User not found'}), 404
+
+                if user.role not in normalized_roles:
+                    return jsonify({'error': 'Insufficient permissions'}), 403
+            except Exception as e:
+                return jsonify({'error': 'Authorization failure', 'detail': str(e)}), 401
             return fn(*args, **kwargs)
         return wrapper
     return decorator
@@ -223,5 +247,39 @@ def require_auth(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         verify_jwt_in_request()
+        return fn(*args, **kwargs)
+    return wrapper
+
+def generate_csrf_token(user_id: int) -> str:
+    """Generate a deterministic CSRF token for a user using HMAC-SHA256.
+
+    Args:
+        user_id: Current authenticated user id
+    Returns:
+        Hex digest string
+    """
+    secret = current_app.config.get('SECRET_KEY', 'dev-secret-key')
+    payload = f'csrf:{user_id}'
+    return hmac.new(secret.encode('utf-8'), payload.encode('utf-8'), hashlib.sha256).hexdigest()
+
+def require_csrf(fn):
+    """Decorator enforcing presence and validity of X-CSRF-Token header for state-changing requests.
+
+    Expects header 'X-CSRF-Token' containing the HMAC produced by generate_csrf_token for the current user.
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        verify_jwt_in_request()
+        raw_identity = get_jwt_identity()
+        try:
+            user_id = int(raw_identity)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Invalid user identity'}), 401
+        provided = request.headers.get('X-CSRF-Token')
+        if not provided:
+            return jsonify({'error': 'CSRF token missing'}), 403
+        expected = generate_csrf_token(user_id)
+        if not hmac.compare_digest(provided, expected):
+            return jsonify({'error': 'Invalid CSRF token'}), 403
         return fn(*args, **kwargs)
     return wrapper

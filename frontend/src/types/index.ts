@@ -11,7 +11,7 @@ export interface User {
   email: string
   phone: string
   full_name: string
-  role: UserRole | string
+  role: UserRole
   is_active: boolean
   created_at: string
   last_login?: string
@@ -82,6 +82,7 @@ export interface AuthResponse {
   access_token?: string
   error?: string
   user?: User
+  must_change_credentials?: boolean
 }
 
 export interface LoginRequest {
@@ -146,6 +147,21 @@ export interface TransactionResponse {
 export interface TransactionHistory {
   transactions: Transaction[]
   total_count: number
+}
+
+// Dashboard types
+export interface DashboardQuickLink {
+  label: string
+  path: string
+}
+
+export interface DashboardAccount extends Account {
+  recent_transactions: Transaction[]
+}
+
+export interface DashboardResponse {
+  accounts: DashboardAccount[]
+  quick_links: DashboardQuickLink[]
 }
 
 // Support types

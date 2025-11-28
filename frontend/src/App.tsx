@@ -4,6 +4,7 @@ import { useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage.tsx'
 import RegisterPage from './pages/RegisterPage.tsx'
 import DashboardPage from './pages/DashboardPage.tsx'
+import ChangeCredentialsPage from './pages/ChangeCredentialsPage.tsx'
 import AccountsPage from './pages/AccountsPage.tsx'
 import TransactionsPage from './pages/TransactionsPage.tsx'
 import SupportPage from './pages/SupportPage.tsx'
@@ -12,7 +13,11 @@ import AuditPage from './pages/AuditPage.tsx'
 import ProfilePage from './pages/ProfilePage.tsx'
 import NotFoundPage from './pages/NotFoundPage.tsx'
 import ProtectedRoute from './components/ProtectedRoute.tsx'
+import { UserRole } from './types'
 import LoadingSpinner from './components/LoadingSpinner.tsx'
+import InternalTransferPage from './pages/InternalTransferPage.tsx'
+import ExternalTransferPage from './pages/ExternalTransferPage.tsx'
+import BillsPage from './pages/BillsPage.tsx'
 
 const App: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth()
@@ -27,6 +32,14 @@ const App: React.FC = () => {
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/change-credentials"
+          element={
+            <ProtectedRoute>
+              <ChangeCredentialsPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Protected routes */}
         <Route
@@ -54,9 +67,25 @@ const App: React.FC = () => {
           }
         />
         <Route
-          path="/support"
+          path="/transfer/internal"
           element={
             <ProtectedRoute>
+              <InternalTransferPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/transfer/external"
+          element={
+            <ProtectedRoute>
+              <ExternalTransferPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/support"
+          element={
+            <ProtectedRoute requiredRoles={[UserRole.CUSTOMER, UserRole.SUPPORT_AGENT, UserRole.ADMIN]}>
               <SupportPage />
             </ProtectedRoute>
           }
@@ -69,12 +98,20 @@ const App: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/bills"
+          element={
+            <ProtectedRoute>
+              <BillsPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Admin routes */}
         <Route
           path="/admin"
           element={
-            <ProtectedRoute requiredRoles={['admin']}>
+            <ProtectedRoute requiredRoles={[UserRole.ADMIN]}>
               <AdminPage />
             </ProtectedRoute>
           }
@@ -84,7 +121,7 @@ const App: React.FC = () => {
         <Route
           path="/audit"
           element={
-            <ProtectedRoute requiredRoles={['auditor', 'admin']}>
+            <ProtectedRoute requiredRoles={[UserRole.AUDITOR, UserRole.ADMIN]}>
               <AuditPage />
             </ProtectedRoute>
           }

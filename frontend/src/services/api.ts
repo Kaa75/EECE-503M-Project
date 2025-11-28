@@ -10,11 +10,13 @@ import {
   AuditLogResponse
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api';
 
 class ApiService {
   private api: AxiosInstance;
   private accessToken: string | null = null;
+  private csrfToken: string | null = null;
 
   constructor() {
     this.api = axios.create({
@@ -24,11 +26,16 @@ class ApiService {
       }
     });
 
-    // Add request interceptor to include auth token
+    // Add request interceptor to include auth token and CSRF token
     this.api.interceptors.request.use(
       (config) => {
         if (this.accessToken) {
           config.headers.Authorization = `Bearer ${this.accessToken}`;
+        }
+        // Attach CSRF token for state-changing methods
+        const method = (config.method || 'get').toLowerCase();
+        if (this.csrfToken && ['post', 'put', 'patch', 'delete'].includes(method)) {
+          config.headers['X-CSRF-Token'] = this.csrfToken;
         }
         return config;
       },
@@ -54,6 +61,7 @@ class ApiService {
     if (token) {
       this.accessToken = token;
     }
+    // Load CSRF token from memory only (do not persist by default)
   }
 
   setAccessToken(token: string): void {
@@ -64,6 +72,14 @@ class ApiService {
   clearAccessToken(): void {
     this.accessToken = null;
     localStorage.removeItem('accessToken');
+  }
+
+  setCsrfToken(token: string): void {
+    this.csrfToken = token;
+  }
+
+  clearCsrfToken(): void {
+    this.csrfToken = null;
   }
 
   // ==================== Authentication ====================
@@ -93,9 +109,11 @@ class ApiService {
     try {
       const response = await this.api.post('/auth/logout');
       this.clearAccessToken();
+      this.clearCsrfToken();
       return response.data;
     } catch (error) {
       this.clearAccessToken();
+      this.clearCsrfToken();
       return { success: true };
     }
   }
@@ -118,10 +136,32 @@ class ApiService {
     }
   }
 
+  async changeCredentials(data: { current_password: string; new_username: string; new_password: string }): Promise<{ success: boolean }>{
+    try {
+      const response = await this.api.post('/auth/change-credentials', data);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   async updateProfile(data: UpdateProfileRequest): Promise<User> {
     try {
       const response = await this.api.put<User>('/auth/profile', data);
       return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async fetchCsrfToken(): Promise<string> {
+    try {
+      const response = await this.api.get<{ csrf_token: string }>('/auth/csrf');
+      const token = response.data.csrf_token;
+      if (token) {
+        this.setCsrfToken(token);
+      }
+      return token;
     } catch (error) {
       throw this.handleError(error);
     }
@@ -233,6 +273,17 @@ class ApiService {
     }
   }
 
+  async getAllTransactions(limit = 50, offset = 0): Promise<TransactionHistory> {
+    try {
+      const response = await this.api.get<TransactionHistory>(`/transactions/all`, {
+        params: { limit, offset }
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   async filterTransactions(
     accountId: number,
     filters: {
@@ -279,6 +330,17 @@ class ApiService {
   async getOpenTickets(limit = 10, offset = 0): Promise<TicketListResponse> {
     try {
       const response = await this.api.get<TicketListResponse>('/support/tickets/open', {
+        params: { limit, offset }
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async getTicketsByStatus(status: 'open' | 'in_progress' | 'resolved', limit = 10, offset = 0): Promise<TicketListResponse> {
+    try {
+      const response = await this.api.get<TicketListResponse>(`/support/tickets/status/${status}`, {
         params: { limit, offset }
       });
       return response.data;
@@ -403,11 +465,31 @@ class ApiService {
     }
   }
 
+  // ==================== Dashboard ====================
+
+  async getDashboard(): Promise<{ accounts: any[]; quick_links: { label: string; path: string }[] }> {
+    try {
+      const response = await this.api.get('/dashboard');
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   // ==================== Admin ====================
 
   async getAllUsers(limit = 50, offset = 0): Promise<{ users: User[]; total_count: number }> {
     try {
       const response = await this.api.get('/admin/users', { params: { limit, offset } });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async createUser(data: { username: string; password: string; email: string; phone: string; full_name: string; role: string }): Promise<User> {
+    try {
+      const response = await this.api.post('/admin/users', data);
       return response.data;
     } catch (error) {
       throw this.handleError(error);

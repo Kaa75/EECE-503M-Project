@@ -26,7 +26,7 @@ const AccountsPage: React.FC = () => {
     loadAccounts()
   }, [user])
 
-  const loadAccounts = async () => {
+  const loadAccounts = async (): Promise<void> => {
     try {
       setLoading(true)
       setError('')
@@ -41,27 +41,28 @@ const AccountsPage: React.FC = () => {
           loadRecentTransactions(account.id)
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error loading accounts:', err)
-      setError(err.message || 'Failed to load accounts')
+      const message = err instanceof Error ? err.message : 'Failed to load accounts'
+      setError(message)
     } finally {
       setLoading(false)
     }
   }
 
-  const loadRecentTransactions = async (accountId: number) => {
+  const loadRecentTransactions = async (accountId: number): Promise<void> => {
     try {
       const result = await apiService.getAccountTransactions(accountId, 5, 0)
       setRecentTransactions(prev => ({
         ...prev,
         [accountId]: result.transactions
       }))
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to load transactions for account:', accountId)
     }
   }
 
-  const handleCreateAccount = async (e: React.FormEvent) => {
+  const handleCreateAccount = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     try {
       setError('')
@@ -74,9 +75,10 @@ const AccountsPage: React.FC = () => {
       setShowCreateForm(false)
       setNewAccount({ account_type: 'checking', opening_balance: '' })
       loadAccounts()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error creating account:', err)
-      setError(err.message || 'Failed to create account')
+      const message = err instanceof Error ? err.message : 'Failed to create account'
+      setError(message)
     }
   }
 
@@ -119,7 +121,7 @@ const AccountsPage: React.FC = () => {
                 <label>Account Type</label>
                 <select
                   value={newAccount.account_type}
-                  onChange={(e) => setNewAccount({ ...newAccount, account_type: e.target.value as 'checking' | 'savings' })}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewAccount({ ...newAccount, account_type: e.target.value as 'checking' | 'savings' })}
                   required
                 >
                   <option value="checking">Checking</option>
@@ -133,7 +135,7 @@ const AccountsPage: React.FC = () => {
                   step="0.01"
                   min="0"
                   value={newAccount.opening_balance}
-                  onChange={(e) => setNewAccount({ ...newAccount, opening_balance: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewAccount({ ...newAccount, opening_balance: e.target.value })}
                   placeholder="0.00"
                   required
                 />

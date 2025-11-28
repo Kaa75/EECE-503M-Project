@@ -19,6 +19,7 @@ def seed_default_admin():
             return
         
         # Create default admin
+        # Seed default admin with credential rotation requirement per spec
         admin = User(
             username='admin',
             email='admin@banking.com',
@@ -26,7 +27,8 @@ def seed_default_admin():
             password_hash=hash_password('Admin@123'),
             full_name='System Administrator',
             role=UserRole.ADMIN,
-            is_active=True
+            is_active=True,
+            must_change_credentials=True
         )
         
         db.session.add(admin)
