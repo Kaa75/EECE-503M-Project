@@ -220,6 +220,10 @@ const AdminPage: React.FC = () => {
                           </button>
                           <button
                             onClick={async () => {
+                              setError(''); setSuccess('')
+                              try {
+                                await apiService.fetchCsrfToken()
+                              } catch {}
                               setViewAccountsUser(user)
                               setShowAccountsViewer(true)
                               setAccountsLoading(true)

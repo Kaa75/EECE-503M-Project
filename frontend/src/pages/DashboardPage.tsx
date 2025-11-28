@@ -109,6 +109,12 @@ const DashboardPage: React.FC = () => {
                 <p>Go to {link.label}</p>
               </Link>
             ))}
+          {(user?.role === UserRole.SUPPORT_AGENT || user?.role === UserRole.AUDITOR) && (
+            <Link to="/transactions" className="action-card card">
+              <h3>View All Transactions</h3>
+              <p>See all bank transactions</p>
+            </Link>
+          )}
           {user?.role !== UserRole.AUDITOR && user?.role !== UserRole.ADMIN && (
             <Link to="/support" className="action-card card">
               <h3>💬 Support</h3>

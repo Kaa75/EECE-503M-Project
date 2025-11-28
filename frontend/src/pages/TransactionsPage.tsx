@@ -164,8 +164,8 @@ const TransactionsPage: React.FC = () => {
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
-        {/* Transfer Button - hidden for admin users */}
-        {user?.role !== UserRole.ADMIN && (
+        {/* Transfer Button - customers only */}
+        {user?.role === UserRole.CUSTOMER && (
           <div className="mb-3">
             <button 
               onClick={() => setShowTransferForm(!showTransferForm)}
@@ -177,7 +177,7 @@ const TransactionsPage: React.FC = () => {
         )}
 
         {/* Transfer Form */}
-        {showTransferForm && user?.role !== UserRole.ADMIN && (
+        {showTransferForm && user?.role === UserRole.CUSTOMER && (
           <div className="card mb-3">
             <h2>New Transfer</h2>
             
