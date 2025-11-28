@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from sqlalchemy.exc import IntegrityError
 from flask_jwt_extended import create_access_token, create_refresh_token
 from app.models import User, UserRole, AuditAction, db
 from app.security import (
@@ -94,6 +95,9 @@ class AuthService:
                 'email': user.email,
                 'role': user.role.value
             }
+        except IntegrityError:
+            db.session.rollback()
+            raise ValueError("Username or email already exists")
         except Exception as e:
             db.session.rollback()
             raise ValueError(f"Failed to register user: {str(e)}")

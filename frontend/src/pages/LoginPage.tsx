@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -8,23 +8,46 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { login, error: authError, clearError, isLoading } = useAuth()
+
+  // Sync local error with auth context error
+  useEffect(() => {
+    if (authError) {
+      setError(authError)
+    }
+  }, [authError])
+
+  // Clear errors when component unmounts or user navigates away
+  useEffect(() => {
+    return () => {
+      clearError()
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
+    clearError()
     setLoading(true)
+
+    console.log('Login form submitted with:', { username, password: '***' });
 
     try {
       const mustChange = await login(username, password)
+      console.log('Login successful, mustChange:', mustChange);
       if (mustChange) {
         navigate('/change-credentials')
       } else {
         navigate('/dashboard')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      console.error('Login error in LoginPage:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Login failed'
+      console.log('Setting error message:', errorMessage);
+      setError(errorMessage)
+      // Don't set loading to false immediately to ensure error is displayed
     } finally {
+      console.log('Setting loading to false');
       setLoading(false)
     }
   }
@@ -44,7 +67,11 @@ const LoginPage: React.FC = () => {
               id="username"
               type="text"
               value={username}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setUsername(e.target.value)
+                setError('')
+                clearError()
+              }}
               required
               disabled={loading}
             />
@@ -56,14 +83,18 @@ const LoginPage: React.FC = () => {
               id="password"
               type="password"
               value={password}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setPassword(e.target.value)
+                setError('')
+                clearError()
+              }}
               required
               disabled={loading}
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
+          <button type="submit" className="btn btn-primary" disabled={loading || isLoading}>
+            {(loading || isLoading) ? 'Logging in...' : 'Login'}
           </button>
         </form>
 

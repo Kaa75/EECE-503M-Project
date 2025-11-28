@@ -44,8 +44,15 @@ def auth_headers(app_context, client):
     )
     
     data = json.loads(response.data)
+    token = data['access_token']
+    
+    # Fetch CSRF token
+    csrf_response = client.get('/api/auth/csrf', headers={'Authorization': f"Bearer {token}"})
+    csrf_data = json.loads(csrf_response.data)
+    
     return {
-        'Authorization': f"Bearer {data['access_token']}",
+        'Authorization': f"Bearer {token}",
+        'X-CSRF-Token': csrf_data['csrf_token'],
         'Content-Type': 'application/json'
     }
 
@@ -69,8 +76,15 @@ def admin_headers(app_context, client):
     )
     
     data = json.loads(response.data)
+    token = data['access_token']
+    
+    # Fetch CSRF token
+    csrf_response = client.get('/api/auth/csrf', headers={'Authorization': f"Bearer {token}"})
+    csrf_data = json.loads(csrf_response.data)
+    
     return {
-        'Authorization': f"Bearer {data['access_token']}",
+        'Authorization': f"Bearer {token}",
+        'X-CSRF-Token': csrf_data['csrf_token'],
         'Content-Type': 'application/json'
     }
 

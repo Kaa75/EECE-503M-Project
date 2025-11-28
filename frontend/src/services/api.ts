@@ -46,8 +46,11 @@ class ApiService {
     this.api.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          // Token expired or invalid
+        // Check if the error is from a login attempt
+        const isLoginRequest = error.config?.url?.includes('/auth/login');
+
+        if (error.response?.status === 401 && !isLoginRequest) {
+          // Token expired or invalid - only redirect if NOT a login attempt
           this.accessToken = null;
           localStorage.removeItem('accessToken');
           window.location.href = '/login';
@@ -101,6 +104,7 @@ class ApiService {
       }
       return response.data;
     } catch (error) {
+      console.error('Login error:', error);
       throw this.handleError(error);
     }
   }

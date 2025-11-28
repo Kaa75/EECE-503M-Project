@@ -46,7 +46,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     setError(null);
     try {
+      console.log('Attempting login for:', username);
       const response = await apiService.login({ username, password });
+      console.log('Login response:', response);
       if (response.success && response.access_token) {
         // Fetch CSRF token after successful login and store it in API client
         try {
@@ -62,6 +64,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error(response.error || 'Login failed');
       }
     } catch (err) {
+      console.error('Login error in AuthContext:', err);
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
       throw err;
